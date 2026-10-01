@@ -60,12 +60,14 @@ const editingId = ref<string | null>(null)
 /** 弹窗表单单独持有可空值，提交时再收敛为 FixtureDraft，避免组件类型与模型类型互相污染 */
 const form = reactive<{
   channel: number | null
+  fixtureNo: string
   position: FixturePosition
   fixtureType: FixtureType
   gel: string
   patchNote: string
 }>({
   channel: DMX_CHANNEL_MIN,
+  fixtureNo: '',
   position: '面光',
   fixtureType: '成像灯',
   gel: '',
@@ -104,6 +106,7 @@ function openCreate(position?: FixturePosition): void {
   editingId.value = null
   const nextChannel = flatFixtures.value.reduce((max, fixture) => Math.max(max, fixture.channel), 0) + 1
   form.channel = Math.min(nextChannel, DMX_CHANNEL_MAX)
+  form.fixtureNo = ''
   form.position = position ?? '面光'
   form.fixtureType = '成像灯'
   form.gel = ''
@@ -114,6 +117,7 @@ function openCreate(position?: FixturePosition): void {
 function openEdit(fixture: Fixture): void {
   editingId.value = fixture.id
   form.channel = fixture.channel
+  form.fixtureNo = fixture.fixtureNo
   form.position = fixture.position
   form.fixtureType = fixture.fixtureType
   form.gel = fixture.gel
@@ -141,6 +145,8 @@ async function submitForm(): Promise<void> {
   const payload: FixtureDraft = {
     sessionId: sessionId.value,
     channel: form.channel,
+    fixtureNo: form.fixtureNo.trim(),
+    consoleUid: editingId.value ? fixtureStore.fixtureById(editingId.value)?.consoleUid ?? null : null,
     position: form.position,
     fixtureType: form.fixtureType,
     gel: form.gel.trim(),
@@ -175,6 +181,10 @@ function confirmRemove(fixture: Fixture): void {
 
 function goCues(): void {
   void router.push(`/sessions/${sessionId.value}/cues`)
+}
+
+function goConsole(): void {
+  void router.push(`/sessions/${sessionId.value}/console`)
 }
 
 function goSessions(): void {
@@ -212,6 +222,7 @@ function positionColor(position: FixturePosition): string {
       </div>
       <div class="page__actions">
         <NButton @click="goSessions">返回场次</NButton>
+        <NButton @click="goConsole">控台配接包对账</NButton>
         <NButton @click="goCues">Cue 时间轴</NButton>
         <NButton type="primary" :disabled="!session" @click="openCreate()">新建灯位通道</NButton>
       </div>
@@ -362,6 +373,9 @@ function positionColor(position: FixturePosition): string {
         </NFormItem>
         <NFormItem v-if="duplicateChannel" label=" ">
           <span class="channel-picker__warn">该通道号在本场次已存在，保存后会形成重复通道并高亮提示。</span>
+        </NFormItem>
+        <NFormItem label="灯具编号">
+          <NInput v-model:value="form.fixtureNo" placeholder="例如 L12（现场编制，可随转场重排）" />
         </NFormItem>
         <NFormItem label="灯位方位">
           <NSelect :value="form.position" :options="positionOptions" @update:value="handlePositionChange" />

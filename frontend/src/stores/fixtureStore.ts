@@ -59,6 +59,11 @@ export const useFixtureStore = defineStore('fixture', () => {
     return fixtures.value.find((fixture) => fixture.id === id) ?? null
   }
 
+  /** 按控台稳定身份查灯具（同一场次内） */
+  function fixtureByConsoleUid(sessionId: string, consoleUid: string): Fixture | null {
+    return fixtures.value.find((fixture) => fixture.sessionId === sessionId && fixture.consoleUid === consoleUid) ?? null
+  }
+
   function usedChannels(sessionId: string): number[] {
     return sortedFixturesOfSession(sessionId).map((fixture) => fixture.channel)
   }
@@ -90,6 +95,8 @@ export const useFixtureStore = defineStore('fixture', () => {
       id: createId('fix'),
       sessionId: draft.sessionId,
       channel: draft.channel,
+      fixtureNo: draft.fixtureNo,
+      consoleUid: draft.consoleUid,
       position: draft.position,
       fixtureType: draft.fixtureType,
       gel: draft.gel,
@@ -139,6 +146,40 @@ export const useFixtureStore = defineStore('fixture', () => {
     patchChecks.value = { ...patchChecks.value, [sessionId]: emptyPatchCheck() }
   }
 
+  /**
+   * 对账写入：把选定的控台身份 / 编号 / 通道落回本地灯具。
+   * 只允许来自对账流程的三类现场事实，灯位、灯具类型、色纸等编排字段一律保留。
+   * 返回实际发生改动的灯具数。
+   */
+  async function applyReconcileFixtures(
+    writes: ReadonlyArray<{ fixtureId: string; consoleUid: string; fixtureNo: string; channel: number }>
+  ): Promise<number> {
+    if (writes.length === 0) return 0
+    const now = Date.now()
+    const touchedSessions = new Set<string>()
+    const next = writes.map((write) => {
+      const target = fixtureById(write.fixtureId)
+      if (!target) throw new Error(`灯位通道 ${write.fixtureId} 不存在，对账写入中止`)
+      const channelError = validateChannel(write.channel)
+      if (channelError) throw new Error(channelError)
+      touchedSessions.add(target.sessionId)
+      return {
+        ...target,
+        channel: write.channel,
+        fixtureNo: write.fixtureNo,
+        consoleUid: write.consoleUid,
+        updatedAt: now
+      }
+    })
+    await db.fixtures.bulkPut(next)
+    const patched = new Map(next.map((fixture) => [fixture.id, fixture]))
+    fixtures.value = fixtures.value.map((fixture) => patched.get(fixture.id) ?? fixture)
+    touchedSessions.forEach((sessionId) => {
+      applyPatchCheck(sessionId, buildPatchCheck(fixturesOfSession(sessionId)))
+    })
+    return next.length
+  }
+
   return {
     fixtures,
     patchChecks,
@@ -148,12 +189,14 @@ export const useFixtureStore = defineStore('fixture', () => {
     sortedFixturesOfSession,
     groupedFixturesOfSession,
     fixtureById,
+    fixtureByConsoleUid,
     usedChannels,
     patchCheckOf,
     applyPatchCheck,
     hydrate,
     addFixture,
     updateFixture,
+    applyReconcileFixtures,
     removeFixture,
     removeBySession
   }

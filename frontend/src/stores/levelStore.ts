@@ -116,6 +116,54 @@ export const useLevelStore = defineStore('level', () => {
     levels.value = levels.value.filter((level) => !removing.has(level.cueId))
   }
 
+  /**
+   * 对账写入：按 (cueId, fixtureId) 幂等地批量应用控台亮度 / 色温。
+   * remove=true 表示控台报零电平且裁决删除本地记录（使该通道退出本 Cue）。
+   */
+  async function applyReconcileLevels(
+    writes: ReadonlyArray<{ cueId: string; fixtureId: string; intensity: number; colorTempK: number; remove: boolean }>
+  ): Promise<number> {
+    if (writes.length === 0) return 0
+    const now = Date.now()
+    const toPut: CueLevel[] = []
+    const toDelete: string[] = []
+
+    writes.forEach((write) => {
+      const existing = levelOf(write.cueId, write.fixtureId)
+      if (write.remove) {
+        if (existing) toDelete.push(existing.id)
+        return
+      }
+      const intensity = clampIntensity(write.intensity)
+      const colorTempK = Math.round(write.colorTempK)
+      if (existing) {
+        if (existing.intensity === intensity && existing.colorTempK === colorTempK) return
+        toPut.push({ ...existing, intensity, colorTempK, updatedAt: now })
+      } else {
+        toPut.push({
+          id: createId('lvl'),
+          cueId: write.cueId,
+          fixtureId: write.fixtureId,
+          intensity,
+          colorTempK,
+          focusNote: '',
+          updatedAt: now
+        })
+      }
+    })
+
+    if (toPut.length > 0) await db.levels.bulkPut(toPut)
+    if (toDelete.length > 0) await db.levels.bulkDelete(toDelete)
+
+    const putMap = new Map(toPut.map((level) => [level.id, level]))
+    const deleteSet = new Set(toDelete)
+    levels.value = [
+      ...levels.value.filter((level) => !deleteSet.has(level.id) && !putMap.has(level.id)),
+      ...toPut
+    ]
+    return toPut.length + toDelete.length
+  }
+
   return {
     levels,
     hydrated,
@@ -126,6 +174,7 @@ export const useLevelStore = defineStore('level', () => {
     countOfCue,
     hydrate,
     upsertLevel,
+    applyReconcileLevels,
     removeLevel,
     removeByCue,
     removeByFixture,

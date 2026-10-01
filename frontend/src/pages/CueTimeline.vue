@@ -301,6 +301,10 @@ function goFixtures(): void {
   void router.push(`/sessions/${sessionId.value}/fixtures`)
 }
 
+function goConsole(): void {
+  void router.push(`/sessions/${sessionId.value}/console`)
+}
+
 function goSheets(): void {
   void router.push('/sheets')
 }
@@ -332,6 +336,7 @@ function channelFilterDuplicate(fixtureId: string): boolean {
       </div>
       <div class="page__actions">
         <NButton @click="goFixtures">灯位通道</NButton>
+        <NButton @click="goConsole">控台配接包对账</NButton>
         <NButton @click="goSheets">排演表</NButton>
         <NButton @click="showShift = true">批量偏移过渡</NButton>
         <NButton @click="sortByCueNo">按 Cue 号重排</NButton>

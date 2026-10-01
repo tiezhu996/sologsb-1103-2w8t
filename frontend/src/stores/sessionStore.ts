@@ -6,6 +6,7 @@ import { createId } from '@/utils/id'
 import { sumCues } from '@/utils/fade'
 import { useCueStore } from '@/stores/cueStore'
 import { useFixtureStore } from '@/stores/fixtureStore'
+import { useImportJobStore } from '@/stores/importJobStore'
 import { useLevelStore } from '@/stores/levelStore'
 import { useSheetStore } from '@/stores/sheetStore'
 
@@ -99,6 +100,7 @@ export const useSessionStore = defineStore('session', () => {
     const fixtureStore = useFixtureStore()
     const levelStore = useLevelStore()
     const sheetStore = useSheetStore()
+    const importJobStore = useImportJobStore()
 
     const cueIds = cueStore.cuesOfSession(id).map((cue) => cue.id)
     await db.sessions.delete(id)
@@ -107,6 +109,7 @@ export const useSessionStore = defineStore('session', () => {
     await cueStore.removeBySession(id)
     await fixtureStore.removeBySession(id)
     await sheetStore.removeBySession(id)
+    await importJobStore.removeBySession(id)
     await renumber()
     if (currentSessionId.value === id) {
       currentSessionId.value = sortedSessions.value.length > 0 ? sortedSessions.value[0].id : null

@@ -4,6 +4,7 @@ import App from '@/App.vue'
 import router from '@/router'
 import { useCueStore } from '@/stores/cueStore'
 import { useFixtureStore } from '@/stores/fixtureStore'
+import { useImportJobStore } from '@/stores/importJobStore'
 import { useLevelStore } from '@/stores/levelStore'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useSheetStore } from '@/stores/sheetStore'
@@ -26,7 +27,8 @@ async function bootstrap(): Promise<void> {
       useFixtureStore(pinia).hydrate(),
       useCueStore(pinia).hydrate(),
       useLevelStore(pinia).hydrate(),
-      useSheetStore(pinia).hydrate()
+      useSheetStore(pinia).hydrate(),
+      useImportJobStore(pinia).hydrate()
     ])
   } catch (error) {
     console.error('[gbcuesheet] 本地数据载入失败，将以空数据启动：', error)

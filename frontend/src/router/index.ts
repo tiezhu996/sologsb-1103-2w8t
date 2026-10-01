@@ -18,6 +18,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '灯位通道配置台' }
   },
   {
+    path: '/sessions/:id/console',
+    name: 'console-import',
+    component: () => import('@/pages/ConsoleImport.vue'),
+    meta: { title: '控台配接包对账' }
+  },
+  {
     path: '/sessions/:id/cues',
     name: 'cue-timeline',
     component: () => import('@/pages/CueTimeline.vue'),

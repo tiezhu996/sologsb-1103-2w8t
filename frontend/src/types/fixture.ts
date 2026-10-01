@@ -30,6 +30,13 @@ export interface Fixture {
   sessionId: string
   /** DMX 通道号 */
   channel: number
+  /** 灯具编号（现场编制，可随转场重排），例如 `L12` */
+  fixtureNo: string
+  /**
+   * 控台灯具稳定身份锚点：导入控台配接包对账后写入。
+   * 重新导入同一包时按它识别同一盏灯，绝不按通道号硬盖；未对账过为 null。
+   */
+  consoleUid: string | null
   /** 灯位方位 */
   position: FixturePosition
   /** 灯具类型 */
@@ -76,6 +83,8 @@ export function createEmptyFixtureDraft(sessionId: string, channel = DMX_CHANNEL
   return {
     sessionId,
     channel,
+    fixtureNo: '',
+    consoleUid: null,
     position: '面光',
     fixtureType: '成像灯',
     gel: '',
