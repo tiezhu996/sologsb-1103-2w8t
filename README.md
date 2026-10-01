@@ -29,7 +29,7 @@ docker compose up -d --build    # 改动代码后重新构建
 | 语言 | TypeScript（`strict`，无 `any`） | `npm run build` 内含 `vue-tsc --noEmit` 类型检查 |
 | UI 组件库 | Naive UI（暗色剧场主题） | 按需引入组件，无全局注册 |
 | 构建工具 | Vite 6 | 路由级代码分割 + 依赖单独 vendor 分块 |
-| 状态管理 | Pinia | 5 个 store，页面只读 store |
+| 状态管理 | Pinia | 6 个 store，页面只读 store |
 | 路由 | Vue Router 4（history 模式） | nginx `try_files` 做 SPA 回退 |
 | 本地存储 | IndexedDB（Dexie 4 封装） | 含数据结构版本号与升级迁移逻辑 |
 | 部署 | 多阶段 Dockerfile（node:20-alpine + nginx:alpine） | 构建期类型检查零错误 |
@@ -40,11 +40,23 @@ docker compose up -d --build    # 改动代码后重新构建
 | --- | --- | --- | --- |
 | `/sessions` | 场次编排 | 新建场次、上下调序、查看每场 Cue 数与过渡总时长、硬切衔接预警 | Session、Cue |
 | `/sessions/:id/fixtures` | 灯位通道配置台 | 通道号排布、按灯位分组折叠、重复通道号高亮、灯位负载校验 | Fixture、Session |
+| `/sessions/:id/console-import` | 控台配接包对账 | 转场后导入控台 JSON 包，灯具编号 / 通道 / 亮度 / 色温与本地 Cue 表对账 | ConsoleImportBatch、FixtureIdentity |
 | `/sessions/:id/cues` | Cue 编排时间轴 | 插入 / 复制 / 删除 Cue、拖拽调整先后、沿袭上一条参数、批量偏移过渡时间 | Cue、CueLevel |
 | `/cues/:id/levels` | 通道电平编辑 | 逐通道设定亮度与色温、色温漂移检查、一键对齐基准色温 | CueLevel、Fixture |
 | `/sheets` | 排演表生成与导出 | 勾选 Cue 组表、本地留存历史、预览 / 复制 / 下载纯文本 | RehearsalSheet、Cue |
 
-核心动作闭环：**建场次 → 配灯位通道 → 插入 Cue → 设定过渡与通道电平 → 导出排演表**。
+核心动作闭环：**建场次 → 配灯位通道 → 插入 Cue → 设定过渡与通道电平 → 导出排演表**；转场换台后追加一步：**导入控台配接包对账 → 选定争议 → 写回本地 Cue 表**。
+
+### 控台配接包对账（现场事实 vs 本地编排）
+
+控台导出的配接包**只提供现场事实**，与本地编排决定严格分开：
+
+- **对账（包 → 本地）**：灯具编号（灯号）、DMX 通道、各 Cue 的亮度与色温。
+- **永远保留本地编排**：场次归属、Cue 提示语、触发方式、渐亮 / 保持 / 渐暗时间；配接包不覆盖。
+- **灯具身份不按通道硬盖**：身份以控台稳定标识 `uid` 为准，首次按「既有身份映射 → 灯号 → 通道」提示命中并需确认；重导同一灯具（哪怕换号、换通道）沿用同一本地配接。
+- **先列双方数据，选定后才写入**：换号（用控台灯号 / 留本地）、通道争用（控台通道 / 本地通道 / 手填空闲通道）、电平缺失（保留本地 / 写 0 / 跳过）都必须逐项选定，未选定前禁止写库；场次里本地有、包内没有的灯具只列出、默认不动。
+- **失败可重试且不重复**：批次保留配接包原文与对账进度；同一 `session + packageId` 复用同一批次，灯具按 uid 映射 upsert、电平按 `(cueId, fixtureId)` upsert、Cue 按编号去重，重试同一包不会产生重复记录。
+- 包内缺失编号的 Cue 可选「本地新建」（默认过渡参数，随后再编排）或「跳过电平」。示例文件见 `frontend/public/sample-console-patch.json`。
 
 ## 四、本地开发
 
@@ -75,11 +87,13 @@ sologsb-1103/
     └── src/
         ├── main.ts                 # 启动时先把本地数据载入 Pinia，再挂载视图
         ├── App.vue                 # 暗色主题外壳 + 侧边导航 + Message/Dialog Provider
-        ├── types/                  # 5 个数据模型，一模型一文件
-        │   ├── session.ts  fixture.ts  cue.ts  level.ts  sheet.ts
+        ├── types/                  # 数据模型，一模型一文件
+        │   ├── session.ts  fixture.ts  cue.ts  level.ts
+        │   ├── sheet.ts    consoleImport.ts
         ├── stores/                 # Pinia：跨页状态唯一来源
         │   ├── sessionStore.ts  cueStore.ts  fixtureStore.ts
         │   ├── levelStore.ts    sheetStore.ts
+        │   └── consoleImportStore.ts
         ├── components/common/      # 共享组件
         │   ├── FadeBar.vue      # 渐变条：渐亮/保持/渐暗按比例绘制
         │   ├── ChannelChip.vue  # 通道标签：通道号 + 灯位色块 + 亮度百分比
@@ -89,23 +103,25 @@ sologsb-1103/
         │   ├── useCueOrder.ts        # 按 cueNo 排序、重排落库、相邻过渡汇总
         │   └── useChannelConflict.ts # 重复通道号与灯位过载检测
         ├── pages/
-        │   ├── SessionList.vue  FixtureBoard.vue  CueTimeline.vue
-        │   ├── LevelEditor.vue  SheetList.vue
+        │   ├── SessionList.vue  FixtureBoard.vue  ConsoleImport.vue
+        │   ├── CueTimeline.vue  LevelEditor.vue   SheetList.vue
         ├── router/index.ts
         └── utils/
-            ├── fade.ts     # 过渡时间格式化、色温一致性判定、排演表纯文本拼装
-            ├── db.ts       # IndexedDB（Dexie）封装：版本号与升级迁移
-            ├── export.ts   # 文本下载、文件名生成、剪贴板复制
-            ├── cueOrder.ts # Cue 编号解析、比较、排序与位次计算
-            ├── patch.ts    # 通道冲突 / 灯位负载纯函数
-            └── id.ts       # 本地主键生成
+            ├── fade.ts           # 过渡时间格式化、色温一致性判定、排演表纯文本拼装
+            ├── db.ts             # IndexedDB（Dexie）封装：版本号与升级迁移
+            ├── export.ts         # 文本下载、文件名生成、剪贴板复制
+            ├── cueOrder.ts       # Cue 编号解析、比较、排序与位次计算
+            ├── patch.ts          # 通道冲突 / 灯位负载纯函数
+            ├── consolePackage.ts # 控台配接包 JSON 解析与严格校验
+            ├── reconcile.ts      # 对账引擎：身份匹配、争议/阻断判定、生效值
+            └── id.ts             # 本地主键生成
 ```
 
 ## 六、数据存储说明
 
 - 所有数据存放在**浏览器本地 IndexedDB**，数据库名 `gbcuesheet`，由 `src/utils/db.ts` 用 Dexie 统一封装；页面不直接读写数据库，只调用 store 的 action。
-- 共 6 张表：`sessions`、`fixtures`、`cues`、`levels`、`sheets`、`appMeta`（元数据）。
-- **数据结构版本号**：`DB_VERSION = 2`。`version(1)` 定义初始结构；`version(2)` 新增 `updatedAt` / `sheetNo` 索引、`appMeta` 表，并在 `upgrade()` 中迁移既有数据（补齐 `updatedAt`、`orderIndex`、`holdSec`，规范化遗留排演表编号与条目快照）。
+- 共 8 张表：`sessions`、`fixtures`、`cues`、`levels`、`sheets`、`appMeta`（元数据）、`fixtureIdentities`（控台 uid ↔ 本地灯具身份映射）、`consoleImports`（控台配接包导入批次与对账进度）。
+- **数据结构版本号**：`DB_VERSION = 3`。`version(1)` 定义初始结构；`version(2)` 新增 `updatedAt` / `sheetNo` 索引、`appMeta` 表，并在 `upgrade()` 中迁移既有数据（补齐 `updatedAt`、`orderIndex`、`holdSec`，规范化遗留排演表编号与条目快照）；`version(3)` 给灯位通道补充灯具编号 `fixtureNo`，新增身份映射表与导入批次表（既有配接的 `fixtureNo` 迁移为空字符串）。
 - 删除场次会级联清理其灯位通道、Cue、通道电平与排演表；删除通道会清理对应的电平记录。
 - **容器无状态**：不使用数据库服务、不挂载命名卷；换浏览器或清理站点数据即等于清空。排演表以生成时刻的快照留档，之后修改 Cue 不影响历史记录。
 

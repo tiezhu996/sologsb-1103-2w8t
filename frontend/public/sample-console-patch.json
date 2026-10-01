@@ -1,0 +1,42 @@
+{
+  "format": "gbcuesheet/console-patch",
+  "version": 1,
+  "packageId": "SAMPLE-20261001-01",
+  "consoleName": "示例控台 grandMA3（台口）",
+  "exportedAt": "2026-10-01T19:30:00.000Z",
+  "fixtures": [
+    { "uid": "fix-uuid-0001", "fixtureNo": "L101", "channel": 11, "model": "Source Four 19°" },
+    { "uid": "fix-uuid-0002", "fixtureNo": "L102", "channel": 12, "model": "Source Four 26°" },
+    { "uid": "fix-uuid-0003", "fixtureNo": "L201", "channel": 21, "model": "PC 2kW" },
+    { "uid": "fix-uuid-0004", "fixtureNo": "L202", "channel": 22, "model": "PC 2kW" }
+  ],
+  "cues": [
+    {
+      "cueNo": "Q1",
+      "levels": [
+        { "uid": "fix-uuid-0001", "intensity": 80, "colorTempK": 3200 },
+        { "uid": "fix-uuid-0002", "intensity": 75, "colorTempK": 3200 },
+        { "uid": "fix-uuid-0003", "intensity": 0, "colorTempK": null },
+        { "uid": "fix-uuid-0004", "intensity": null, "colorTempK": null }
+      ]
+    },
+    {
+      "cueNo": "Q2",
+      "levels": [
+        { "uid": "fix-uuid-0001", "intensity": 40, "colorTempK": 3200 },
+        { "uid": "fix-uuid-0002", "intensity": 40, "colorTempK": 3300 },
+        { "uid": "fix-uuid-0003", "intensity": 90, "colorTempK": 5600 },
+        { "uid": "fix-uuid-0004", "intensity": 85, "colorTempK": 5600 }
+      ]
+    },
+    {
+      "cueNo": "Q3",
+      "levels": [
+        { "uid": "fix-uuid-0001", "intensity": 100, "colorTempK": 3000 },
+        { "uid": "fix-uuid-0002", "intensity": 100, "colorTempK": 3000 },
+        { "uid": "fix-uuid-0003", "intensity": 60, "colorTempK": 4200 },
+        { "uid": "fix-uuid-0004", "intensity": 60, "colorTempK": 4200 }
+      ]
+    }
+  ]
+}

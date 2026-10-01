@@ -30,6 +30,8 @@ export interface Fixture {
   sessionId: string
   /** DMX 通道号 */
   channel: number
+  /** 灯具编号（灯号），与控台灯号对账；本地手动配接可为空字符串 */
+  fixtureNo: string
   /** 灯位方位 */
   position: FixturePosition
   /** 灯具类型 */
@@ -76,6 +78,7 @@ export function createEmptyFixtureDraft(sessionId: string, channel = DMX_CHANNEL
   return {
     sessionId,
     channel,
+    fixtureNo: '',
     position: '面光',
     fixtureType: '成像灯',
     gel: '',

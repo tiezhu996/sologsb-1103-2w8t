@@ -90,6 +90,7 @@ export const useFixtureStore = defineStore('fixture', () => {
       id: createId('fix'),
       sessionId: draft.sessionId,
       channel: draft.channel,
+      fixtureNo: draft.fixtureNo,
       position: draft.position,
       fixtureType: draft.fixtureType,
       gel: draft.gel,

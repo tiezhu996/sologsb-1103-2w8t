@@ -60,12 +60,14 @@ const editingId = ref<string | null>(null)
 /** 弹窗表单单独持有可空值，提交时再收敛为 FixtureDraft，避免组件类型与模型类型互相污染 */
 const form = reactive<{
   channel: number | null
+  fixtureNo: string
   position: FixturePosition
   fixtureType: FixtureType
   gel: string
   patchNote: string
 }>({
   channel: DMX_CHANNEL_MIN,
+  fixtureNo: '',
   position: '面光',
   fixtureType: '成像灯',
   gel: '',
@@ -104,6 +106,7 @@ function openCreate(position?: FixturePosition): void {
   editingId.value = null
   const nextChannel = flatFixtures.value.reduce((max, fixture) => Math.max(max, fixture.channel), 0) + 1
   form.channel = Math.min(nextChannel, DMX_CHANNEL_MAX)
+  form.fixtureNo = ''
   form.position = position ?? '面光'
   form.fixtureType = '成像灯'
   form.gel = ''
@@ -114,6 +117,7 @@ function openCreate(position?: FixturePosition): void {
 function openEdit(fixture: Fixture): void {
   editingId.value = fixture.id
   form.channel = fixture.channel
+  form.fixtureNo = fixture.fixtureNo
   form.position = fixture.position
   form.fixtureType = fixture.fixtureType
   form.gel = fixture.gel
@@ -141,6 +145,7 @@ async function submitForm(): Promise<void> {
   const payload: FixtureDraft = {
     sessionId: sessionId.value,
     channel: form.channel,
+    fixtureNo: form.fixtureNo.trim(),
     position: form.position,
     fixtureType: form.fixtureType,
     gel: form.gel.trim(),
@@ -175,6 +180,10 @@ function confirmRemove(fixture: Fixture): void {
 
 function goCues(): void {
   void router.push(`/sessions/${sessionId.value}/cues`)
+}
+
+function goConsoleImport(): void {
+  void router.push(`/sessions/${sessionId.value}/console-import`)
 }
 
 function goSessions(): void {
@@ -213,6 +222,7 @@ function positionColor(position: FixturePosition): string {
       <div class="page__actions">
         <NButton @click="goSessions">返回场次</NButton>
         <NButton @click="goCues">Cue 时间轴</NButton>
+        <NButton @click="goConsoleImport">控台对账</NButton>
         <NButton type="primary" :disabled="!session" @click="openCreate()">新建灯位通道</NButton>
       </div>
     </header>
@@ -299,6 +309,7 @@ function positionColor(position: FixturePosition): string {
                 @click="handleChipClick(fixture)"
               />
               <span class="fixture-row__type">{{ fixture.fixtureType }}</span>
+              <span v-if="fixture.fixtureNo" class="fixture-row__no mono">灯号 {{ fixture.fixtureNo }}</span>
               <span class="fixture-row__note">{{ fixture.patchNote || '无配接备注' }}</span>
               <span class="toolbar__spacer" />
               <NButton size="tiny" quaternary @click="openEdit(fixture)">编辑</NButton>
@@ -313,6 +324,7 @@ function positionColor(position: FixturePosition): string {
         <div class="channel-table">
           <div class="channel-table__head">
             <span>通道</span>
+            <span>灯号</span>
             <span>灯位</span>
             <span>灯具</span>
             <span>色纸</span>
@@ -333,6 +345,7 @@ function positionColor(position: FixturePosition): string {
               :duplicate="conflictChannels.includes(fixture.channel)"
               size="small"
             />
+            <span class="mono">{{ fixture.fixtureNo || '—' }}</span>
             <span>{{ fixture.position }}</span>
             <span>{{ fixture.fixtureType }}</span>
             <span class="mono">{{ fixture.gel || '—' }}</span>
@@ -362,6 +375,9 @@ function positionColor(position: FixturePosition): string {
         </NFormItem>
         <NFormItem v-if="duplicateChannel" label=" ">
           <span class="channel-picker__warn">该通道号在本场次已存在，保存后会形成重复通道并高亮提示。</span>
+        </NFormItem>
+        <NFormItem label="灯具编号">
+          <NInput v-model:value="form.fixtureNo" placeholder="控台灯号，例如 L12；手动配接可留空" />
         </NFormItem>
         <NFormItem label="灯位方位">
           <NSelect :value="form.position" :options="positionOptions" @update:value="handlePositionChange" />
@@ -531,7 +547,7 @@ function positionColor(position: FixturePosition): string {
 .channel-table__head,
 .channel-table__row {
   display: grid;
-  grid-template-columns: 190px 80px 90px 90px 1fr 130px;
+  grid-template-columns: 190px 70px 80px 90px 80px 1fr 130px;
   align-items: center;
   gap: 10px;
   padding: 9px 6px;

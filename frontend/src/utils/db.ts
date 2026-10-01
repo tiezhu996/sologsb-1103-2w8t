@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { Cue } from '@/types/cue'
+import type { ConsoleImportBatch, FixtureIdentity } from '@/types/consoleImport'
 import type { Fixture } from '@/types/fixture'
 import type { CueLevel } from '@/types/level'
 import type { RehearsalSheet } from '@/types/sheet'
@@ -8,7 +9,7 @@ import type { Session } from '@/types/session'
 /** IndexedDB 数据库名 */
 export const DB_NAME = 'gbcuesheet'
 /** 当前数据结构版本号，与 db.version() 对应 */
-export const DB_VERSION = 2
+export const DB_VERSION = 3
 
 /** 单键值元数据表，记录结构版本等本地状态 */
 export interface AppMetaRecord {
@@ -22,6 +23,9 @@ export interface AppMetaRecord {
  * - v1：场次 / 灯位通道 / Cue / 通道电平 / 排演表 五张表
  * - v2：场次补充 updatedAt 索引、排演表补充 sheetNo 索引与条目快照、新增 appMeta 元数据表，
  *       并对既有数据执行升级迁移（补齐字段、规范化遗留编号）
+ * - v3：灯位通道补充灯具编号 fixtureNo；新增控台灯具身份映射（fixtureIdentities）
+ *       与控台配接包导入批次（consoleImports）。身份映射保证重导同一控台灯具时
+ *       沿用同一本地配接身份，而不是按通道号重新硬盖。
  */
 export class CueSheetDatabase extends Dexie {
   sessions!: Table<Session, string>
@@ -30,6 +34,8 @@ export class CueSheetDatabase extends Dexie {
   levels!: Table<CueLevel, string>
   sheets!: Table<RehearsalSheet, string>
   appMeta!: Table<AppMetaRecord, string>
+  fixtureIdentities!: Table<FixtureIdentity, string>
+  consoleImports!: Table<ConsoleImportBatch, string>
 
   constructor() {
     super(DB_NAME)
@@ -76,6 +82,27 @@ export class CueSheetDatabase extends Dexie {
             if (!Array.isArray(sheet.includedCueIds)) sheet.includedCueIds = []
           })
       })
+
+    this.version(3)
+      .stores({
+        sessions: 'id, order, createdAt, updatedAt',
+        fixtures: 'id, sessionId, channel, fixtureNo, [sessionId+channel], [sessionId+fixtureNo]',
+        cues: 'id, sessionId, cueNo, orderIndex, [sessionId+orderIndex]',
+        levels: 'id, cueId, fixtureId, [cueId+fixtureId]',
+        sheets: 'id, sessionId, sheetNo, generatedAt',
+        appMeta: 'key',
+        fixtureIdentities: 'id, sessionId, fixtureId, uid, [sessionId+uid]',
+        consoleImports: 'id, sessionId, packageId, status, dedupeKey'
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table('fixtures')
+          .toCollection()
+          .modify((fixture: Fixture) => {
+            // 既有本地配接没有控台灯号，留空字符串（灯具编号由后续对账补齐）
+            if (fixture.fixtureNo === undefined || fixture.fixtureNo === null) fixture.fixtureNo = ''
+          })
+      })
   }
 }
 
@@ -95,14 +122,29 @@ export async function writeMeta(key: string, value: string): Promise<void> {
 
 /** 清空全部本地数据（含结构版本回落重开） */
 export async function clearAllData(): Promise<void> {
-  await db.transaction('rw', [db.sessions, db.fixtures, db.cues, db.levels, db.sheets, db.appMeta], async () => {
-    await Promise.all([
-      db.sessions.clear(),
-      db.fixtures.clear(),
-      db.cues.clear(),
-      db.levels.clear(),
-      db.sheets.clear(),
-      db.appMeta.clear()
-    ])
-  })
+  await db.transaction(
+    'rw',
+    [
+      db.sessions,
+      db.fixtures,
+      db.cues,
+      db.levels,
+      db.sheets,
+      db.appMeta,
+      db.fixtureIdentities,
+      db.consoleImports
+    ],
+    async () => {
+      await Promise.all([
+        db.sessions.clear(),
+        db.fixtures.clear(),
+        db.cues.clear(),
+        db.levels.clear(),
+        db.sheets.clear(),
+        db.appMeta.clear(),
+        db.fixtureIdentities.clear(),
+        db.consoleImports.clear()
+      ])
+    }
+  )
 }

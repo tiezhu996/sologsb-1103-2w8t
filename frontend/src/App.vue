@@ -61,6 +61,16 @@ const menuOptions = computed<MenuOption[]>(() => {
     },
     {
       label: () =>
+        h(
+          RouterLink,
+          { to: sessionId ? `/sessions/${sessionId}/console-import` : '/sessions' },
+          { default: () => '控台配接包对账' }
+        ),
+      key: 'console-import',
+      disabled: !sessionId
+    },
+    {
+      label: () =>
         h(RouterLink, { to: sessionId ? `/sessions/${sessionId}/cues` : '/sessions' }, { default: () => 'Cue 编排时间轴' }),
       key: 'cues',
       disabled: !sessionId
@@ -87,6 +97,7 @@ const menuOptions = computed<MenuOption[]>(() => {
 const activeKey = computed(() => {
   const path = route.path
   if (path.startsWith('/sheets')) return 'sheets'
+  if (path.includes('/console-import')) return 'console-import'
   if (path.includes('/fixtures')) return 'fixtures'
   if (path.includes('/cues') || path.includes('/levels')) return 'cues'
   return 'sessions'
